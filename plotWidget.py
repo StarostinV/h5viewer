@@ -7,6 +7,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib import use as matplotlib_use
 from matplotlib.widgets import RectangleSelector
+from scipy.optimize import curve_fit
 
 matplotlib_use("Qt5Agg")
 
@@ -58,12 +59,12 @@ class WidgetPlot(FigureCanvas):
         self.RectangleSelector.update()
         self.RectangleSelector = None
         self.cut_window = None
-
-    def set_cursor(self):
-        self.cursor = SnaptoCursor(self, self.x, self.y)
-        self.mpl_connect('motion_notify_event', self.cursor.mouse_move)
-        self.mpl_connect('key_press_event', self.cursor.key_press)
-        self.mpl_connect('key_release_event', self.cursor.key_release)
+    #
+    # def set_cursor(self):
+    #     self.cursor = SnaptoCursor(self, self.x, self.y)
+    #     self.mpl_connect('motion_notify_event', self.cursor.mouse_move)
+    #     self.mpl_connect('key_press_event', self.cursor.key_press)
+    #     self.mpl_connect('key_release_event', self.cursor.key_release)
 
     def set_rectangle(self):
         self.RectangleSelector = RectangleSelector(self.axes,
@@ -274,6 +275,7 @@ class CutWindow(QWidget):
         self.toolbar = NavigationToolbar(self.canvas, self)
         self.layout().addWidget(self.toolbar)
         self.layout().addWidget(self.canvas)
+        self.setWindowTitle('Cut window')
         self.show()
 
     def closeEvent(self, event):
@@ -298,6 +300,15 @@ class CutCanvas(FigureCanvas):
                                    QSizePolicy.Expanding)
         FigureCanvas.updateGeometry(self)
 
+    @staticmethod
+    def lorentzian(x, a, w, x0):
+        return a / ((x - x0) ** 2 + w)
+
+    def default_fit_function(self, x, central_a, central_w, side_a, side_w, side_x0):
+        return self.lorentzian(x, central_a, central_w, 0) + \
+               self.lorentzian(x, side_a, side_w, side_x0) + \
+               self.lorentzian(x, side_a, side_w, - side_x0)
+
     def context_menu(self, event):
         if event.button == 3:
             y = self.parent().height()
@@ -310,6 +321,11 @@ class CutCanvas(FigureCanvas):
             delete_cuts_action = menu.addAction(self.tr('Delete cuts'))
             delete_cuts_action.triggered.connect(self.delete_cuts)
             delete_cuts_action.setEnabled(len(self.plot_list) > 1)
+
+            menu.addSeparator()
+            fit_action = menu.addAction(self.tr('Plot fit'))
+            fit_action.triggered.connect(self.get_fit)
+            fit_action.setEnabled(len(self.plot_list) > 0)
             menu.exec_(self.parent().mapToGlobal(position))
 
     def freeze_cut(self):
@@ -322,6 +338,9 @@ class CutCanvas(FigureCanvas):
         self.ax_cut.autoscale_view(True, True, True)
         self.draw()
 
+    def get_fit(self):
+        pass
+
     def delete_cuts(self):
         assert len(self.plot_list) > 1
         for _ in range(len(self.plot_list) - 1):
@@ -331,7 +350,7 @@ class CutCanvas(FigureCanvas):
         self.draw()
 
     def update_cut_plot(self):
-        frame = self.plot2d_canvas.y
+        frame = self.plot2d_canvas.data
         x1, y1, x2, y2 = self.plot2d_canvas.rectangle_coordinates
         frame = frame[y1:y2, x1:x2]
 
@@ -349,56 +368,3 @@ class CutCanvas(FigureCanvas):
         self.ax_cut.relim()  # Recalculate limits
         self.ax_cut.autoscale_view(True, True, True)
         self.draw()
-
-
-class SnaptoCursor(object):
-    """
-    Like Cursor but the crosshair snaps to the nearest x,y point
-    For simplicity, I'm assuming x is sorted
-    """
-
-    def __init__(self, plt_obj, x, y):
-        self.plt_obj = plt_obj
-        self.ax = plt_obj.axes
-        self.lx = self.ax.axhline(color='k')  # the horiz line
-        self.ly = self.ax.axvline(color='k')  # the vert line
-        self.x = x
-        self.y = y
-        # text location in axes coords
-        self.txt = self.ax.text(0.7, 0.9, '', transform=self.ax.transAxes)
-
-    def mouse_move(self, event):
-        if not event.inaxes:
-            return
-
-        x, y = event.xdata, event.ydata
-
-        indx = np.searchsorted(self.x, [x])[0]
-        x = self.x[indx]
-        y = self.y[indx]
-        # update the line positions
-        self.lx.set_ydata(y)
-        self.ly.set_xdata(x)
-
-        self.txt.set_text('x=%1.2f, y=%1.2f' % (x, y))
-        print('x=%1.2f, y=%1.2f' % (x, y))
-        self.plt_obj.draw()
-
-    def key_press(self, event):
-        if not event.inaxes:
-            print('Press away')
-            return
-
-        # update the line positions
-        print('Pressed')
-        self.lx.color = 'red'
-        self.ly.color = 'red'
-
-    def key_release(self, event):
-        if not event.inaxes:
-            return
-
-        # update the line positions
-        print('Released')
-        self.lx.color = 'black'
-        self.ly.color = 'black'
