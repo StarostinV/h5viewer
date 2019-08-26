@@ -15,8 +15,8 @@ class Axes2D(object):
         self.parent = parent
 
         self.params_2d = {}
-        self.y, self.data = [], []
-        # self.active = False
+        self.extent = None
+        self.y, self.x1, self.x2, self.data = [], [], [], []
         self.rectangle_coordinates = None
         self.RectangleSelector = None
         self.cut_window = None
@@ -124,6 +124,14 @@ class Axes2D(object):
             self.ax.autoscale_view(True, True, True)
         else:
             self.plot_obj = self.ax.imshow(self.y, **self.params_2d)
+        if x is not None:
+            assert type(x) == tuple
+            assert len(x) == 2
+            assert (len(x[0]), len(x[1])) == data.shape
+            self.extent = (x[0][0], x[0][-1], x[1][0], x[1][-1])
+            self.plot_obj.set_extent(self.extent)
+        else:
+            self.extent = None
         self.parent.draw()
         if self.cut_window:
             self.cut_window.canvas.update_cut_plot()

@@ -35,7 +35,8 @@ class MyApp(QtWidgets.QWidget):
         if isinstance(selected_object, h5py.Dataset):
             if selected_object.shape:
                 if type(selected_object[0]) in self.plot_handler.allowed_types:
-                    self.plot_handler.update_plot(y=selected_object[()])
+                    y = selected_object[()]
+                    self.plot_handler.update_plot(y=y)
                 else:
                     print(selected_object[0])
                     print(type(selected_object[0]))

@@ -9,6 +9,8 @@ from pandas import DataFrame
 import h5py
 from functools import partial
 
+__all__ = ['H5Tree']
+
 MyItem = namedtuple('MyItem', 'parent_id item')
 FileItemKeys = namedtuple('FileItemKeys',
                           'short_name key parent_name filename')
@@ -80,8 +82,9 @@ class H5Tree(QTreeView):
         self.adjustSize()
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.file_dict = {}
-        for filename in file_list:
-            self.add_h5(filename)
+        if file_list is not None:
+            for filename in file_list:
+                self.add_h5(filename)
 
     def open_new_h5(self, filename):
         self.close_files()
