@@ -15,7 +15,6 @@ class MyApp(QtWidgets.QWidget):
         self.tree.clicked.connect(self.on_clicked)
         self.plot_widget = H5Plot()
         self.plot_handler = self.plot_widget.canvas
-        self.plot_handler.mpl_connect('button_press_event', self.graph_params_window)
         self.h5InfoWidget = DescriptiveLabel()
 
         self.grid = QtWidgets.QGridLayout()
@@ -43,15 +42,6 @@ class MyApp(QtWidgets.QWidget):
 
     def update_label(self, label):
         self.h5InfoWidget.setText(label)
-
-    def graph_params_window(self, event):
-        if event.button == 3 and self.plot_handler.status == 2:
-            x = self.tree.frameGeometry().width()
-            y = self.plot_handler.frameGeometry().height()
-            position = self.mapFromParent(QtCore.QPoint(event.x + x, -event.y+y))
-
-            self.plot_handler.open_2d_context_menu(position)
-            # TODO handle position in a normal way and move function to plot_handler class
 
     def close_files(self):
         self.tree.close_files()

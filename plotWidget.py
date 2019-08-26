@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib.figure import Figure
 from myGUIApplication.colormap_window import ColormapWindow
 from PyQt5.QtWidgets import QSizePolicy, QWidget, QVBoxLayout, QMenu
+from PyQt5.QtCore import QPoint
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib import use as matplotlib_use
@@ -33,6 +34,7 @@ class WidgetPlot(FigureCanvas):
         self.fig = Figure()
         super(WidgetPlot, self).__init__(self.fig)
         self.setParent(parent)
+        self.mpl_connect('button_press_event', self.context_menu)
         self.axes = self.fig.add_subplot(111)
         self.x, self.y, self.data = [], [], []
         self.plot_obj = None
@@ -137,13 +139,18 @@ class WidgetPlot(FigureCanvas):
             self.cut_window.canvas.update_cut_plot()
         self.status = 2
 
-    def open_2d_context_menu(self, position):
+    def context_menu(self, event):
+        if self.status == 2:
+            self.open_2d_context_menu(event)
+
+    def open_2d_context_menu(self, event):
         menu = QMenu()
+        position = self.mapFromParent(QPoint(event.x, event.y))
         parameter_menu = menu.addMenu(self.tr('Plot parameters'))
         change_colormap_action = parameter_menu.addAction(self.tr("Change colormap"))
         change_colormap_action.triggered.connect(self.open_colormap_window)
 
-        log_action_name = "Disable log" if self.plot_handler.apply_log_status else "Apply log"
+        log_action_name = "Disable log" if self.apply_log_status else "Apply log"
         change_log_action = parameter_menu.addAction(self.tr(log_action_name))
         change_log_action.triggered.connect(self.change_log_status)
 
