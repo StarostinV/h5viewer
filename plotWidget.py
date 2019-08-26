@@ -140,7 +140,7 @@ class WidgetPlot(FigureCanvas):
         self.status = 2
 
     def context_menu(self, event):
-        if self.status == 2:
+        if event.button == 3 and self.status == 2:
             self.open_2d_context_menu(event)
 
     def open_2d_context_menu(self, event):
@@ -287,14 +287,48 @@ class CutCanvas(FigureCanvas):
         self.fig = Figure()
         super(CutCanvas, self).__init__(self.fig)
         self.setParent(parent)
+        self.mpl_connect('button_press_event', self.context_menu)
         self.ax_cut = self.fig.add_subplot(111)
         self.x, self.y, self.data = [], [], []
         self.cut_y, self.cut_x = [], []
         self.cut_plot, = self.ax_cut.plot(self.cut_x, self.cut_y)
+        self.plot_list = [self.cut_plot]
         FigureCanvas.setSizePolicy(self,
                                    QSizePolicy.Expanding,
                                    QSizePolicy.Expanding)
         FigureCanvas.updateGeometry(self)
+
+    def context_menu(self, event):
+        if event.button == 3:
+            y = self.parent().height()
+            position = self.mapFromParent(QPoint(event.x, y - event.y))
+            menu = QMenu()
+            freeze_cut_action = menu.addAction(self.tr('Freeze current cut'))
+            freeze_cut_action.triggered.connect(self.freeze_cut)
+            freeze_cut_action.setEnabled(len(self.cut_y) > 0)
+
+            delete_cuts_action = menu.addAction(self.tr('Delete cuts'))
+            delete_cuts_action.triggered.connect(self.delete_cuts)
+            delete_cuts_action.setEnabled(len(self.plot_list) > 1)
+            menu.exec_(self.parent().mapToGlobal(position))
+
+    def freeze_cut(self):
+        self.plot_list.append(self.ax_cut.plot(self.cut_x, self.cut_y)[0])
+        self.cut_x = []
+        self.cut_y = []
+        self.cut_plot.set_ydata(self.cut_y)
+        self.cut_plot.set_xdata(self.cut_x)
+        self.ax_cut.relim()  # Recalculate limits
+        self.ax_cut.autoscale_view(True, True, True)
+        self.draw()
+
+    def delete_cuts(self):
+        assert len(self.plot_list) > 1
+        for _ in range(len(self.plot_list) - 1):
+            self.plot_list.pop(1).remove()
+        self.ax_cut.relim()  # Recalculate limits
+        self.ax_cut.autoscale_view(True, True, True)
+        self.draw()
 
     def update_cut_plot(self):
         frame = self.plot2d_canvas.y
