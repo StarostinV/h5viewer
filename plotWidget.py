@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib.figure import Figure
 from myGUIApplication.colormap_window import ColormapWindow
-from PyQt5.QtWidgets import QSizePolicy, QWidget, QVBoxLayout
+from PyQt5.QtWidgets import QSizePolicy, QWidget, QVBoxLayout, QMenu
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib import use as matplotlib_use
@@ -136,6 +136,25 @@ class WidgetPlot(FigureCanvas):
         if self.cut_window:
             self.cut_window.canvas.update_cut_plot()
         self.status = 2
+
+    def open_2d_context_menu(self, position):
+        menu = QMenu()
+        parameter_menu = menu.addMenu(self.tr('Plot parameters'))
+        change_colormap_action = parameter_menu.addAction(self.tr("Change colormap"))
+        change_colormap_action.triggered.connect(self.open_colormap_window)
+
+        log_action_name = "Disable log" if self.plot_handler.apply_log_status else "Apply log"
+        change_log_action = parameter_menu.addAction(self.tr(log_action_name))
+        change_log_action.triggered.connect(self.change_log_status)
+
+        reset_action = parameter_menu.addAction(self.tr("Reset parameters"))
+        reset_action.triggered.connect(self.reset_parameters)
+
+        menu.addSeparator()
+        open_cut_window_action = menu.addAction(self.tr("Open cut window"))
+        open_cut_window_action.triggered.connect(self.open_cut_window)
+        open_cut_window_action.setEnabled(self.cut_window is None)
+        menu.exec_(position)
 
     def open_colormap_window(self, event):
         if self.status != 2:

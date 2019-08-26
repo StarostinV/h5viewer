@@ -50,23 +50,7 @@ class MyApp(QtWidgets.QWidget):
             y = self.plot_handler.frameGeometry().height()
             position = self.mapFromParent(QtCore.QPoint(event.x + x, -event.y+y))
 
-            menu = QtWidgets.QMenu()
-            parameter_menu = menu.addMenu(self.tr('Plot parameters'))
-            change_colormap_action = parameter_menu.addAction(self.tr("Change colormap"))
-            change_colormap_action.triggered.connect(self.plot_handler.open_colormap_window)
-
-            log_action_name = "Disable log" if self.plot_handler.apply_log_status else "Apply log"
-            change_log_action = parameter_menu.addAction(self.tr(log_action_name))
-            change_log_action.triggered.connect(self.plot_handler.change_log_status)
-
-            reset_action = parameter_menu.addAction(self.tr("Reset parameters"))
-            reset_action.triggered.connect(self.plot_handler.reset_parameters)
-
-            menu.addSeparator()
-            open_cut_window_action = menu.addAction(self.tr("Open cut window"))
-            open_cut_window_action.triggered.connect(self.plot_handler.open_cut_window)
-            open_cut_window_action.setEnabled(self.plot_handler.cut_window is None)
-            menu.exec_(self.tree.viewport().mapToGlobal(position))
+            self.plot_handler.open_2d_context_menu(position)
             # TODO handle position in a normal way and move function to plot_handler class
 
     def close_files(self):
