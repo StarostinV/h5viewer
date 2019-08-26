@@ -145,7 +145,8 @@ class WidgetPlot(FigureCanvas):
 
     def open_2d_context_menu(self, event):
         menu = QMenu()
-        position = self.mapFromParent(QPoint(event.x, event.y))
+        y = self.parent().height()
+        position = self.mapFromParent(QPoint(event.x, y - event.y))
         parameter_menu = menu.addMenu(self.tr('Plot parameters'))
         change_colormap_action = parameter_menu.addAction(self.tr("Change colormap"))
         change_colormap_action.triggered.connect(self.open_colormap_window)
@@ -161,7 +162,7 @@ class WidgetPlot(FigureCanvas):
         open_cut_window_action = menu.addAction(self.tr("Open cut window"))
         open_cut_window_action.triggered.connect(self.open_cut_window)
         open_cut_window_action.setEnabled(self.cut_window is None)
-        menu.exec_(position)
+        menu.exec_(self.parent().mapToGlobal(position))
 
     def open_colormap_window(self, event):
         if self.status != 2:
