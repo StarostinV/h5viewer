@@ -1,0 +1,6 @@
+*.h5
+*.hdf5
+*.csv
+*.edf
+*.gz
+/__pycache__/
