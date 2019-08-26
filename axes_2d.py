@@ -1,52 +1,132 @@
 import numpy as np
-from matplotlib.figure import Figure
-from myGUIApplication.colormap_window import ColormapWindow
-from PyQt5.QtWidgets import QSizePolicy, QWidget, QVBoxLayout, QMenu
 from PyQt5.QtCore import QPoint
+from PyQt5.QtWidgets import QMenu, QWidget, QVBoxLayout, QSizePolicy
+from matplotlib.backends.backend_qt5 import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-from matplotlib import use as matplotlib_use
+from matplotlib.figure import Figure
 from matplotlib.widgets import RectangleSelector
-from scipy.optimize import curve_fit
 
-matplotlib_use("Qt5Agg")
-
-
-class H5Plot(QWidget):
-    def __init__(self, *args, **kwargs):
-        QWidget.__init__(self, *args, **kwargs)
-        self.setLayout(QVBoxLayout())
-        self.canvas = WidgetPlot(self)
-        self.toolbar = NavigationToolbar(self.canvas, self, coordinates=True)
-        self.layout().addWidget(self.toolbar)
-        self.layout().addWidget(self.canvas)
+from myGUIApplication.colormap_window import ColormapWindow
 
 
-class WidgetPlot(FigureCanvas):
-    def __init__(self, parent=None):
-        self.status = 0
+class Axes2D(object):
+    def __init__(self, ax, parent):
+        self.ax = ax
+        self.parent = parent
+
         self.params_2d = {}
-        self.params_1d = {}
-        self.allowed_types = [np.float64, np.float32, np.ndarray, np.int32]
-        self.colormap_window = None
-        self.apply_log_status = False
-        self.Ranges = Plot2DRangesHandler(self)
-
-        self.fig = Figure()
-        super(WidgetPlot, self).__init__(self.fig)
-        self.setParent(parent)
-        self.mpl_connect('button_press_event', self.context_menu)
-        self.axes = self.fig.add_subplot(111)
-        self.x, self.y, self.data = [], [], []
-        self.plot_obj = None
+        self.y, self.data = [], []
+        # self.active = False
         self.rectangle_coordinates = None
         self.RectangleSelector = None
-        self.cursor = None
         self.cut_window = None
-        FigureCanvas.setSizePolicy(self,
-                                   QSizePolicy.Expanding,
-                                   QSizePolicy.Expanding)
-        FigureCanvas.updateGeometry(self)
+        self.colormap_window = None
+        self.apply_log_status = False
+        self.plot_obj = None
+        self.Ranges = Plot2DRangesHandler(self)
+
+    def set_rectangle(self):
+        self.RectangleSelector = RectangleSelector(self.ax,
+                                                   self.line_select_callback,
+                                                   drawtype='box',
+                                                   button=[1],  # don't use middle button
+                                                   minspanx=5,
+                                                   minspany=5,
+                                                   spancoords='pixels',
+                                                   interactive=True)
+
+        def update_rs(event):
+            if self.RectangleSelector is not None:
+                if self.RectangleSelector.active and self.parent.status == 2:
+                    self.RectangleSelector.update()
+
+        self.parent.mpl_connect('draw_event', update_rs)
+        if self.rectangle_coordinates is not None:
+            x1, y1, x2, y2 = self.rectangle_coordinates
+            self.RectangleSelector.extents = (x1, x2, y1, y2)
+            self.RectangleSelector.update()
+
+    def line_select_callback(self, eclick, erelease):
+        """eclick and erelease are the press and release events"""
+        assert self.cut_window is not None
+        self.rectangle_coordinates = int(eclick.xdata), int(eclick.ydata), int(erelease.xdata), int(erelease.ydata)
+        self.cut_window.canvas.update_cut_plot()
+
+    def context_menu(self, event):
+        menu = QMenu()
+        y = self.parent.parent().height()
+        position = self.parent.mapFromParent(QPoint(event.x, y - event.y))
+        parameter_menu = menu.addMenu('Plot parameters')
+        change_colormap_action = parameter_menu.addAction("Change colormap")
+        change_colormap_action.triggered.connect(self.open_colormap_window)
+
+        log_action_name = "Disable log" if self.apply_log_status else "Apply log"
+        change_log_action = parameter_menu.addAction(log_action_name)
+        change_log_action.triggered.connect(self.change_log_status)
+
+        reset_action = parameter_menu.addAction("Reset parameters")
+        reset_action.triggered.connect(self.reset_parameters)
+
+        menu.addSeparator()
+        open_cut_window_action = menu.addAction("Open cut window")
+        open_cut_window_action.triggered.connect(self.open_cut_window)
+        open_cut_window_action.setEnabled(self.cut_window is None)
+        menu.exec_(self.parent.parent().mapToGlobal(position))
+
+    def open_colormap_window(self, event):
+        range_init, range_whole = self.Ranges.get_ranges_for_colormap(self.y)
+        self.colormap_window = ColormapWindow(range_init, range_whole, title='Colormap')
+        self.colormap_window.set_callback(self.colormap_callback)
+        self.colormap_window.show()
+
+    def redraw_2d_plot(self):
+        self.ax.cla()
+        self.plot_obj = self.ax.imshow(self.y, **self.params_2d)
+        if self.cut_window:
+            self.set_rectangle()
+
+    def colormap_callback(self, range_):
+        self.Ranges.update_params(range_)
+        self.redraw_2d_plot()
+        self.parent.draw()
+
+    def change_log_status(self, event):
+        self.apply_log_status = not self.apply_log_status
+        if self.apply_log_status:
+            self.y = self.apply_log(self.data)
+        else:
+            self.y = self.data
+        self.Ranges.change_regime()
+        self.redraw_2d_plot()
+        self.parent.draw()
+
+    def reset_parameters(self, event):
+        self.apply_log_status = False
+        self.params_2d = {}
+        self.redraw_2d_plot()
+        self.parent.draw()
+
+    @staticmethod
+    def apply_log(data):
+        min_value = max([0.1, np.amin(data)])
+        max_value = np.amax(data)
+        return np.log(np.clip(data, min_value, max_value))
+
+    def update_plot(self, data, x=None):
+        self.data = data
+        if self.apply_log_status:
+            self.y = self.apply_log(data)
+        else:
+            self.y = data
+        if self.plot_obj is not None:
+            self.plot_obj.set_data(self.y)
+            self.ax.relim()  # Recalculate limits
+            self.ax.autoscale_view(True, True, True)
+        else:
+            self.plot_obj = self.ax.imshow(self.y, **self.params_2d)
+        self.parent.draw()
+        if self.cut_window:
+            self.cut_window.canvas.update_cut_plot()
 
     def open_cut_window(self):
         self.cut_window = CutWindow(self)
@@ -59,171 +139,6 @@ class WidgetPlot(FigureCanvas):
         self.RectangleSelector.update()
         self.RectangleSelector = None
         self.cut_window = None
-    #
-    # def set_cursor(self):
-    #     self.cursor = SnaptoCursor(self, self.x, self.y)
-    #     self.mpl_connect('motion_notify_event', self.cursor.mouse_move)
-    #     self.mpl_connect('key_press_event', self.cursor.key_press)
-    #     self.mpl_connect('key_release_event', self.cursor.key_release)
-
-    def set_rectangle(self):
-        self.RectangleSelector = RectangleSelector(self.axes,
-                                                   self.line_select_callback,
-                                                   drawtype='box',
-                                                   # useblit=True,
-                                                   button=[1, 3],  # don't use middle button
-                                                   minspanx=5,
-                                                   minspany=5,
-                                                   spancoords='pixels',
-                                                   interactive=True)
-
-        def update_rs(event):
-            if self.RectangleSelector is not None:
-                if self.RectangleSelector.active and self.status == 2:
-                    self.RectangleSelector.update()
-
-        self.mpl_connect('draw_event', update_rs)
-        if self.rectangle_coordinates is not None:
-            x1, y1, x2, y2 = self.rectangle_coordinates
-            self.RectangleSelector.extents = (x1, x2, y1, y2)
-            self.RectangleSelector.update()
-
-    def line_select_callback(self, eclick, erelease):
-        """eclick and erelease are the press and release events"""
-        self.rectangle_coordinates = int(eclick.xdata), int(eclick.ydata), int(erelease.xdata), int(erelease.ydata)
-        self.cut_window.canvas.update_cut_plot()
-
-    def update_plot(self, y, x=None):
-        if len(y.shape) == 1:
-            self.update_1d_plot(y, x)
-        elif len(y.shape) == 2:
-            self.update_2d_plot(y)
-
-    def update_1d_plot(self, y, x):
-        self.y = y
-        self.x = x or list(range(len(y)))
-        if self.status != 1:
-            self.axes.remove()
-            self.axes = self.fig.add_subplot(111)
-            self.plot_obj, = self.axes.plot(self.x, self.y,
-                                            **self.params_1d)
-            # self.set_cursor()
-        else:
-            self.plot_obj.set_xdata(self.x)
-            self.plot_obj.set_ydata(self.y)
-        self.axes.relim()  # Recalculate limits
-        self.axes.autoscale_view(True, True, True)
-        self.draw()
-        self.status = 1
-
-    def apply_log(self, data):
-        min_value = max([0.1, np.amin(data)])
-        max_value = np.amax(data)
-        return np.log(np.clip(data, min_value, max_value))
-
-    def update_2d_plot(self, data):
-        self.data = data
-        if self.apply_log_status:
-            self.y = self.apply_log(data)
-        else:
-            self.y = data
-        self.x = None
-        if self.status != 2:
-            # self.cursor = None
-            self.redraw_2d_plot()
-        else:
-            self.plot_obj.set_data(self.y)
-        self.axes.relim()  # Recalculate limits
-        self.axes.autoscale_view(True, True, True)
-        self.draw()
-        if self.cut_window:
-            self.cut_window.canvas.update_cut_plot()
-        self.status = 2
-
-    def context_menu(self, event):
-        if event.button == 3 and self.status == 2:
-            self.open_2d_context_menu(event)
-
-    def open_2d_context_menu(self, event):
-        menu = QMenu()
-        y = self.parent().height()
-        position = self.mapFromParent(QPoint(event.x, y - event.y))
-        parameter_menu = menu.addMenu(self.tr('Plot parameters'))
-        change_colormap_action = parameter_menu.addAction(self.tr("Change colormap"))
-        change_colormap_action.triggered.connect(self.open_colormap_window)
-
-        log_action_name = "Disable log" if self.apply_log_status else "Apply log"
-        change_log_action = parameter_menu.addAction(self.tr(log_action_name))
-        change_log_action.triggered.connect(self.change_log_status)
-
-        reset_action = parameter_menu.addAction(self.tr("Reset parameters"))
-        reset_action.triggered.connect(self.reset_parameters)
-
-        menu.addSeparator()
-        open_cut_window_action = menu.addAction(self.tr("Open cut window"))
-        open_cut_window_action.triggered.connect(self.open_cut_window)
-        open_cut_window_action.setEnabled(self.cut_window is None)
-        menu.exec_(self.parent().mapToGlobal(position))
-
-    def open_colormap_window(self, event):
-        if self.status != 2:
-            raise ValueError('NOT A 2D STATUS')
-        range_init, range_whole = self.Ranges.get_ranges_for_colormap(self.y)
-        self.colormap_window = ColormapWindow(range_init, range_whole, title='Colormap')
-        self.colormap_window.set_callback(self.colormap_callback)
-        self.colormap_window.show()
-
-    def redraw_2d_plot(self):
-        self.axes.cla()
-        self.plot_obj = self.axes.imshow(self.y, **self.params_2d)
-        if self.cut_window:
-            self.set_rectangle()
-
-    def colormap_callback(self, range_):
-        self.Ranges.update_params(range_)
-        self.redraw_2d_plot()
-        self.draw()
-
-    def change_log_status(self, event):
-        self.apply_log_status = not self.apply_log_status
-        if self.apply_log_status:
-            self.y = self.apply_log(self.data)
-        else:
-            self.y = self.data
-        self.Ranges.change_regime()
-        self.redraw_2d_plot()
-        self.draw()
-
-    def reset_parameters(self, event):
-        self.apply_log_status = False
-        self.params_2d = {}
-        self.redraw_2d_plot()
-        self.draw()
-
-
-class Axes1D(object):
-    def __init__(self, ax, parent):
-        self.ax = ax
-        self.parent = parent
-        self.x = []
-        self.y = []
-        self.plot_obj, = self.ax.plot(self.x, self.y)
-        self.title = ''
-        self.plot_list = []
-
-    def update_plot(self, y, x):
-        self.y = y
-        self.x = x or list(range(len(y)))
-        self.plot_obj.set_xdata(self.x)
-        self.plot_obj.set_ydata(self.y)
-        self.ax.relim()  # Recalculate limits
-        self.ax.autoscale_view(True, True, True)
-
-
-class Axes2D(object):
-    def __init__(self, ax, parent=None):
-        self.ax = ax
-        self.parent = parent
 
 
 class Plot2DRangesHandler(object):

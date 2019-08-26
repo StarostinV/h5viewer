@@ -3,7 +3,7 @@ import h5py
 
 from myGUIApplication_ver2.h5tree import H5Tree
 from myGUIApplication_ver2.my_label import DescriptiveLabel
-from myGUIApplication_ver2.plotWidget import H5Plot
+from myGUIApplication_ver2.h5plot import H5Plot
 
 
 class MyApp(QtWidgets.QWidget):
