@@ -1,12 +1,13 @@
 import numpy as np
 from PyQt5.QtCore import QPoint
-from PyQt5.QtWidgets import QMenu, QWidget, QVBoxLayout, QSizePolicy
+from PyQt5.QtWidgets import QMenu, QWidget, QVBoxLayout, QSizePolicy, QMessageBox
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.widgets import RectangleSelector
+from scipy.optimize import curve_fit
 
-from myGUIApplication.colormap_window import ColormapWindow
+from myGUIApplication_ver2.colormap_window import ColormapWindow
 
 
 class Axes2D(object):
@@ -15,7 +16,6 @@ class Axes2D(object):
         self.parent = parent
 
         self.params_2d = {}
-        self.extent = None
         self.y, self.x1, self.x2, self.data = [], [], [], []
         self.rectangle_coordinates = None
         self.RectangleSelector = None
@@ -49,7 +49,7 @@ class Axes2D(object):
     def line_select_callback(self, eclick, erelease):
         """eclick and erelease are the press and release events"""
         assert self.cut_window is not None
-        self.rectangle_coordinates = int(eclick.xdata), int(eclick.ydata), int(erelease.xdata), int(erelease.ydata)
+        self.rectangle_coordinates = eclick.xdata, eclick.ydata, erelease.xdata, erelease.ydata
         self.cut_window.canvas.update_cut_plot()
 
     def context_menu(self, event):
@@ -102,7 +102,9 @@ class Axes2D(object):
 
     def reset_parameters(self, event):
         self.apply_log_status = False
-        self.params_2d = {}
+        self.params_2d.pop('vmin', None)
+        self.params_2d.pop('vmax', None)
+        self.y = self.data
         self.redraw_2d_plot()
         self.parent.draw()
 
@@ -112,26 +114,38 @@ class Axes2D(object):
         max_value = np.amax(data)
         return np.log(np.clip(data, min_value, max_value))
 
-    def update_plot(self, data, x=None):
-        self.data = data
+    def update_plot(self, obj, file):
+        self.data = obj[()]
         if self.apply_log_status:
-            self.y = self.apply_log(data)
+            self.y = self.apply_log(self.data)
         else:
-            self.y = data
+            self.y = self.data
+
+        try:
+            x_ax = file[obj.attrs['x_axis']][()]
+            y_ax = file[obj.attrs['y_axis']][()]
+            assert (len(x_ax), len(y_ax)) == self.y.shape \
+                   or (len(y_ax), len(x_ax)) == self.y.shape, 'shapes are wrong'
+            if (len(y_ax), len(x_ax)) == self.y.shape:
+                y_ax, x_ax = x_ax, y_ax
+            self.params_2d.update(dict(extent=[min(y_ax), max(y_ax), min(x_ax), max(x_ax)]))
+            self.x1 = y_ax
+            self.x2 = x_ax
+        except (AssertionError, TypeError, KeyError):
+            self.params_2d.pop('extent', None)
+            self.x1 = list(range(0, self.y.shape[1]))
+            self.x2 = list(range(0, self.y.shape[0]))
+
+        except Exception as er:
+            print(er)
+            return
+
         if self.plot_obj is not None:
             self.plot_obj.set_data(self.y)
             self.ax.relim()  # Recalculate limits
             self.ax.autoscale_view(True, True, True)
         else:
             self.plot_obj = self.ax.imshow(self.y, **self.params_2d)
-        if x is not None:
-            assert type(x) == tuple
-            assert len(x) == 2
-            assert (len(x[0]), len(x[1])) == data.shape
-            self.extent = (x[0][0], x[0][-1], x[1][0], x[1][-1])
-            self.plot_obj.set_extent(self.extent)
-        else:
-            self.extent = None
         self.parent.draw()
         if self.cut_window:
             self.cut_window.canvas.update_cut_plot()
@@ -212,6 +226,7 @@ class CutCanvas(FigureCanvas):
         self.fig = Figure()
         super(CutCanvas, self).__init__(self.fig)
         self.setParent(parent)
+        self.apply_log_status = False
         self.mpl_connect('button_press_event', self.context_menu)
         self.ax_cut = self.fig.add_subplot(111)
         self.x, self.y, self.data = [], [], []
@@ -246,10 +261,41 @@ class CutCanvas(FigureCanvas):
             delete_cuts_action.setEnabled(len(self.plot_list) > 1)
 
             menu.addSeparator()
+            normalize_action = menu.addAction(self.tr('Normalize'))
+            # normalize_action.triggered.connect(self.normalize_plots)
+            normalize_action.setEnabled(False)
+
+            if not self.apply_log_status:
+                apply_log_action = menu.addAction(self.tr('Apply log'))
+            else:
+                apply_log_action = menu.addAction(self.tr('Disable log'))
+            apply_log_action.triggered.connect(self.change_log_status)
+
+            menu.addSeparator()
             fit_action = menu.addAction(self.tr('Plot fit'))
             fit_action.triggered.connect(self.get_fit)
             fit_action.setEnabled(len(self.plot_list) > 0)
             menu.exec_(self.parent().mapToGlobal(position))
+
+    def change_log_status(self):
+        if self.apply_log_status:
+            self._disable_log()
+        else:
+            self._apply_log()
+
+    def _apply_log(self):
+        self.ax_cut.set_yscale('log')
+        self.ax_cut.relim()  # Recalculate limits
+        self.ax_cut.autoscale_view(True, True, True)
+        self.draw()
+        self.apply_log_status = not self.apply_log_status
+
+    def _disable_log(self):
+        self.ax_cut.set_yscale('linear')
+        self.ax_cut.relim()  # Recalculate limits
+        self.ax_cut.autoscale_view(True, True, True)
+        self.draw()
+        self.apply_log_status = not self.apply_log_status
 
     def freeze_cut(self):
         self.plot_list.append(self.ax_cut.plot(self.cut_x, self.cut_y)[0])
@@ -262,7 +308,18 @@ class CutCanvas(FigureCanvas):
         self.draw()
 
     def get_fit(self):
-        pass
+        try:
+            self.fit_res = curve_fit(self.default_fit_function, self.cut_x, self.cut_y)
+            print(self.fit_res[0])
+            fitted_y = self.default_fit_function(np.array(self.cut_x), *self.fit_res[0])
+            self.plot_list.append(self.ax_cut.plot(self.cut_x, fitted_y, '--')[0])
+            self.ax_cut.relim()  # Recalculate limits
+            self.ax_cut.autoscale_view(True, True, True)
+            self.draw()
+        except RuntimeError as er:
+            QMessageBox.question(self.plot2d_canvas.parent, 'Fit error',
+                                 f'Error while fitting occured: {er}',
+                                 QMessageBox.Ok)
 
     def delete_cuts(self):
         assert len(self.plot_list) > 1
@@ -275,17 +332,33 @@ class CutCanvas(FigureCanvas):
     def update_cut_plot(self):
         frame = self.plot2d_canvas.data
         x1, y1, x2, y2 = self.plot2d_canvas.rectangle_coordinates
-        frame = frame[y1:y2, x1:x2]
+        x1, x2 = min([x1, x2]), max([x1, x2])
+        y1, y2 = min([y1, y2]), max([y1, y2])
+        print(f'x: {x1} {x2}; y: {y1} {y2}')
+        x_ind = np.where(self.plot2d_canvas.x1 > x1,
+                         np.where(self.plot2d_canvas.x1 < x2,
+                                  True, False), False)
+        y_ind = np.flip(np.where(self.plot2d_canvas.x2 > y1,
+                                 np.where(self.plot2d_canvas.x2 < y2,
+                                          True, False), False), axis=0)
+        try:
+            frame = frame[y_ind, :]
+            frame = frame[:, x_ind]
+        except Exception as er:
+            print(er)
+            return
 
         if abs(y2 - y1) < abs(x2 - x1):
             mean_axis = 0
-            self.cut_x = list(range(x1, x2, 1))
+            self.cut_x = np.linspace(x1, x2, frame.shape[1])
         else:
             mean_axis = 1
-            self.cut_x = list(range(y1, y2, 1))
+            self.cut_x = np.linspace(y1, y2, frame.shape[0])
 
         self.cut_y = np.mean(frame, axis=mean_axis)
-        assert len(self.cut_y) == len(self.cut_x)
+        assert len(self.cut_y) == len(self.cut_x), 'cut axis lengths are wrong'
+        if self.apply_log_status:
+            self.cut_y = np.log(np.array(self.cut_y))
         self.cut_plot.set_ydata(self.cut_y)
         self.cut_plot.set_xdata(self.cut_x)
         self.ax_cut.relim()  # Recalculate limits

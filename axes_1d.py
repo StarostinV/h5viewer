@@ -8,9 +8,15 @@ class Axes1D(object):
         self.title = ''
         self.plot_list = []
 
-    def update_plot(self, y, x):
-        self.y = y
-        self.x = x or list(range(len(y)))
+    def update_plot(self, obj, file):
+        self.y = obj[()]
+        self.x = obj.attrs.get('x_axis', None)
+        try:
+            self.x = file[obj.attrs['x_axis']][()]
+            assert len(self.x) == len(self.y)
+        except (AssertionError, TypeError, KeyError):
+            self.x = range(len(self.y))
+
         self.plot_obj.set_xdata(self.x)
         self.plot_obj.set_ydata(self.y)
         self.ax.relim()  # Recalculate limits

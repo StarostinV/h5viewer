@@ -178,6 +178,12 @@ class H5Tree(QTreeView):
         show_action.triggered.connect(open_df)
         show_action.setEnabled(isinstance(selected_object, h5py.Dataset))
 
+        menu.addSeparator()
+        attrs_menu = menu.addMenu(self.tr('Attributes'))
+        add_reference = attrs_menu.addAction(self.tr('Create reference'))
+
+        menu.addSeparator()
+
         menu.exec_(self.viewport().mapToGlobal(position))
 
     def open_dataframe_window(self, obj):
@@ -345,6 +351,16 @@ class H5Tree(QTreeView):
             return file
         else:
             return file[data.key]
+
+    def get_obj_with_file(self, index):
+        item = self.model_.itemFromIndex(index)
+        data = item.data()
+        file = self.file_dict[data.filename]
+        if data.key == '__root__':
+            selected_obj = file
+        else:
+            selected_obj = file[data.key]
+        return selected_obj, file
 
     def get_selected_object(self):
         index = self.selectedIndexes()[0]

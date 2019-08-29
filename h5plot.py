@@ -44,15 +44,15 @@ class WidgetPlot(FigureCanvas):
                                    QSizePolicy.Expanding)
         FigureCanvas.updateGeometry(self)
 
-    def update_plot(self, y, x=None):
-        if len(y.shape) not in [1, 2]:
+    def update_plot(self, selected_obj, file):
+        if len(selected_obj.shape) not in [1, 2]:
             return
-        new_status = len(y.shape)
+        new_status = len(selected_obj.shape)
         current_ax = self.axes_dict[new_status]
         if new_status != self.status and self.status:
             self.axes_dict[self.status].ax.set_visible(False)
         current_ax.ax.set_visible(True)
-        current_ax.update_plot(y, x)
+        current_ax.update_plot(selected_obj, file)
         self.status = new_status
 
     def context_menu(self, event):
