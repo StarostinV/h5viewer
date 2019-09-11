@@ -1,3 +1,7 @@
+from PyQt5.QtCore import QPoint
+from PyQt5.QtWidgets import QMenu
+
+
 class Axes1D(object):
     def __init__(self, ax, parent):
         self.ax = ax
@@ -24,4 +28,17 @@ class Axes1D(object):
         self.parent.draw()
 
     def context_menu(self, event):
-        pass
+        menu = QMenu()
+        y = self.parent.parent().height()
+        position = self.parent.mapFromParent(QPoint(event.x, y - event.y))
+        reset_graph_action = menu.addAction('Redraw graph')
+        reset_graph_action.triggered.connect(self.redraw_graph)
+
+        menu.exec_(self.parent.parent().mapToGlobal(position))
+
+    def redraw_graph(self):
+        self.ax.cla()
+        self.plot_obj = self.ax.plot(self.x, self.y)[0]
+        self.ax.relim()
+        self.ax.autoscale_view(True, True, True)
+        self.parent.draw()

@@ -1,7 +1,6 @@
 from PyQt5.QtWidgets import QTableView
 from PyQt5.QtGui import QStandardItem, QStandardItemModel
 from PyQt5.QtWidgets import QSizePolicy, QHeaderView
-from PyQt5.QtCore import Qt
 import numpy as np
 import h5py
 
@@ -32,17 +31,20 @@ class DescriptiveLabel(QTableView):
             self.model().appendRow([QStandardItem(name)] + first_row)
             second_row = []
             for k in attrs_keys:
-                if isinstance(obj.attrs[k], np.ndarray):
+                if isinstance(obj.attrs[k], float):
+                    second_row.append(QStandardItem(str(obj.attrs[k])))
+                elif isinstance(obj.attrs[k], str):
+                    second_row.append(QStandardItem(obj.attrs[k]))
+                elif isinstance(obj.attrs[k], np.ndarray):
                     second_row.append(QStandardItem(f'Array of shape {obj.attrs[k].shape}'))
                 elif isinstance(obj.attrs[k], h5py.Reference):
                     second_row.append(QStandardItem('Reference'))
-                elif isinstance(obj.attrs[k], h5py.Reference):
-                    second_row.append(QStandardItem('Byte array'))
                 else:
                     try:
-                        second_row.append(QStandardItem(obj.attrs[k]))
-                    except TypeError:
-                        second_row.append(QStandardItem(type(obj.attrs[k])))
+                        second_row.append(QStandardItem(str(obj.attrs[k])))
+                    except Exception as err:
+                        print(err)
+                        second_row.append(QStandardItem(str(type(obj.attrs[k]))))
             self.model().appendRow([QStandardItem('Attrs')] + second_row)
 
     @staticmethod

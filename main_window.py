@@ -1,8 +1,8 @@
 from PyQt5 import QtWidgets
+from PyQt5.QtGui import QIcon
 from myGUIApplication_ver2.my_app import MyApp
 from directories import Directories
 import sys
-from functools import partial
 
 __all__ = ['run_viewer']
 
@@ -13,20 +13,50 @@ class MainWindow(QtWidgets.QMainWindow):
         self.app_widget = MyApp(h5filelist, self)
         self.setCentralWidget(self.app_widget)
         self.setWindowTitle('My h5 viewer')
+
+        self.init_menu()
+        self.init_toolbar()
+        self.center()
+        self.show()
+
+    def init_menu(self):
         menubar = self.menuBar()
         file_menu = menubar.addMenu('File')
         open_new_file_action = QtWidgets.QAction('Open h5 file', self)
-        open_new_file_action.triggered.connect(partial(self.openFileNameDialog,
-                                                       func=self.app_widget.tree.open_new_h5))
+        open_new_file_action.triggered.connect(self.open_file)
         file_menu.addAction(open_new_file_action)
 
         add_file_action = QtWidgets.QAction('Add h5 file', self)
-        add_file_action.triggered.connect(partial(self.openFileNameDialog,
-                                                  func=self.app_widget.tree.add_h5))
+        add_file_action.triggered.connect(self.add_file)
         file_menu.addAction(add_file_action)
 
-        self.center()
-        self.show()
+    def init_toolbar(self):
+        add_action = QtWidgets.QAction(QIcon('add.png'), 'Add', self)
+        add_action.setShortcut('Ctrl+A')
+        add_action.triggered.connect(self.add_file)
+
+        zoom_action = QtWidgets.QAction(QIcon('zoom.png'), 'Zoom', self)
+
+        color_action = QtWidgets.QAction(QIcon('color.png'), 'Colormap', self)
+
+        profile_action = QtWidgets.QAction(QIcon('profile.png'), 'Profile', self)
+
+        exit_action = QtWidgets.QAction(QIcon('exit.png'), 'Exit', self)
+        exit_action.setShortcut('Ctrl+Q')
+        exit_action.triggered.connect(self.close)
+
+        toolbar = self.addToolBar('Common')
+        toolbar.addAction(add_action)
+        toolbar.addSeparator()
+        toolbar.addAction(color_action)
+        toolbar.addAction(profile_action)
+        toolbar.addAction(zoom_action)
+
+    def add_file(self):
+        self.open_file_name_dialog(self.app_widget.tree.add_h5)
+
+    def open_file(self):
+        self.open_file_name_dialog(self.app_widget.tree.open_new_h5)
 
     def closeEvent(self, event):
         reply = QtWidgets.QMessageBox.question(self, 'Message',
@@ -48,10 +78,10 @@ class MainWindow(QtWidgets.QMainWindow):
         frameGm.moveCenter(centerPoint)
         self.move(frameGm.topLeft())
 
-    def openFileNameDialog(self, func):
+    def open_file_name_dialog(self, func):
         options = QtWidgets.QFileDialog.Options()
         options |= QtWidgets.QFileDialog.DontUseNativeDialog
-        fileName, _ = QtWidgets.QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "",
+        fileName, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open h5 file", "",
                                                             "hdf5 files (*.h5)", options=options)
         if fileName:
             func(fileName)

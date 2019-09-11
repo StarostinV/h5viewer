@@ -1,4 +1,4 @@
-from PyQt5 import QtWidgets, QtCore
+from PyQt5 import QtWidgets
 import h5py
 
 from myGUIApplication_ver2.h5tree import H5Tree
@@ -32,13 +32,17 @@ class MyApp(QtWidgets.QWidget):
     def on_clicked(self, signal):
         selected_object, file = self.tree.get_obj_with_file(signal)
         self.update_label(selected_object)
-        if isinstance(selected_object, h5py.Dataset):
-            if selected_object.shape:
-                if type(selected_object[0]) in self.plot_handler.allowed_types:
-                    self.plot_handler.update_plot(selected_obj=selected_object, file=file)
-                else:
-                    print(selected_object[0])
-                    print(type(selected_object[0]))
+        try:
+            if isinstance(selected_object, h5py.Dataset):
+                if selected_object.shape:
+                    if type(selected_object[0]) in self.plot_handler.allowed_types:
+                        self.plot_handler.update_plot(selected_obj=selected_object, file=file)
+                    else:
+                        print(selected_object[0])
+                        print(type(selected_object[0]))
+        except Exception as err:
+            print('ERROR OCCURED!!!')
+            print(err)
 
     def update_label(self, obj):
         self.h5InfoWidget.update_table(obj)

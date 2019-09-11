@@ -3,4 +3,5 @@
 *.csv
 *.edf
 *.gz
+*.png
 /__pycache__/

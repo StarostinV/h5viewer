@@ -67,6 +67,9 @@ class Axes2D(object):
         reset_action = parameter_menu.addAction("Reset parameters")
         reset_action.triggered.connect(self.reset_parameters)
 
+        redraw_action = menu.addAction("Redraw graph")
+        redraw_action.triggered.connect(self.redraw_2d_plot)
+
         menu.addSeparator()
         open_cut_window_action = menu.addAction("Open cut window")
         open_cut_window_action.triggered.connect(self.open_cut_window)
@@ -128,7 +131,6 @@ class Axes2D(object):
                    or (len(y_ax), len(x_ax)) == self.y.shape, 'shapes are wrong'
             if (len(y_ax), len(x_ax)) == self.y.shape:
                 y_ax, x_ax = x_ax, y_ax
-            self.params_2d.update(dict(extent=[min(y_ax), max(y_ax), min(x_ax), max(x_ax)]))
             self.x1 = y_ax
             self.x2 = x_ax
         except (AssertionError, TypeError, KeyError):
@@ -140,8 +142,11 @@ class Axes2D(object):
             print(er)
             return
 
+        self.params_2d.update(dict(extent=[self.x1[0], self.x1[-1], self.x2[0], self.x2[-1]]))
+
         if self.plot_obj is not None:
             self.plot_obj.set_data(self.y)
+            self.plot_obj.set_extent(self.params_2d['extent'])
             self.ax.relim()  # Recalculate limits
             self.ax.autoscale_view(True, True, True)
         else:
@@ -357,8 +362,6 @@ class CutCanvas(FigureCanvas):
 
         self.cut_y = np.mean(frame, axis=mean_axis)
         assert len(self.cut_y) == len(self.cut_x), 'cut axis lengths are wrong'
-        if self.apply_log_status:
-            self.cut_y = np.log(np.array(self.cut_y))
         self.cut_plot.set_ydata(self.cut_y)
         self.cut_plot.set_xdata(self.cut_x)
         self.ax_cut.relim()  # Recalculate limits
